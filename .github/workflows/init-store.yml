@@ -1,0 +1,38 @@
+name: Opprett delt liste
+
+# Lager en tom, delt liste på jsonblob.com første gang og lagrer adressen i store.json.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  init:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create blob if missing
+        run: |
+          if [ -f store.json ]; then
+            url=$(jq -r .url store.json)
+            echo "store.json finnes: $url"
+            curl -fsS -H 'Accept: application/json' "$url"
+            exit 0
+          fi
+          loc=$(curl -fsS -D - -o /dev/null -X POST \
+            -H 'Content-Type: application/json' -H 'Accept: application/json' \
+            -d '{"week":null,"players":[]}' https://jsonblob.com/api/jsonBlob \
+            | tr -d '\r' | awk 'tolower($1)=="location:"{print $2}')
+          case "$loc" in http*) url="$loc" ;; *) url="https://jsonblob.com$loc" ;; esac
+          url=$(echo "$url" | sed 's#jsonblob.com/jsonBlob/#jsonblob.com/api/jsonBlob/#')
+          echo "Ny liste: $url"
+          curl -fsS -H 'Accept: application/json' "$url"
+          jq -n --arg url "$url" '{url:$url}' > store.json
+          git config user.name github-actions
+          git config user.email github-actions@users.noreply.github.com
+          git add store.json
+          git commit -m "Opprett delt liste"
+          git push

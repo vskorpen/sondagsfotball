@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Søndagsfotball</title>
+<style>
+  :root {
+    --bg: #f4f6f3; --card: #ffffff; --text: #1b2a1f; --muted: #5d6b61;
+    --line: #dfe5df; --green: #1f8a4c; --green-dark: #17703d; --red: #c0392b; --red-dark: #9e2f23;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101612; --card: #18211b; --text: #e8efe9; --muted: #9aa99f;
+      --line: #2a362e; --green: #2fa863; --green-dark: #26904f; --red: #d9534f; --red-dark: #bf4441;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 480px; margin: 0 auto; padding: 16px 16px 48px; }
+  .hero { display: block; width: 100%; height: auto; aspect-ratio: 1024 / 572; border-radius: 14px; margin-bottom: 16px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  .when { color: var(--muted); margin: 0 0 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+  label { display: block; font-weight: 600; margin-bottom: 6px; }
+  input {
+    width: 100%; font: inherit; padding: 12px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--text);
+  }
+  .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  button {
+    font: inherit; font-weight: 600; padding: 14px 10px; border: 0; border-radius: 10px;
+    color: #fff; cursor: pointer;
+  }
+  button:disabled { opacity: .6; cursor: default; }
+  #yes { background: var(--green); } #yes:hover:not(:disabled) { background: var(--green-dark); }
+  #no { background: var(--red); } #no:hover:not(:disabled) { background: var(--red-dark); }
+  #msg { min-height: 1.5em; margin: 10px 0 0; color: var(--muted); font-size: .95rem; }
+  h2 { font-size: 1.05rem; margin: 0 0 8px; display: flex; justify-content: space-between; }
+  h2 .count { color: var(--muted); font-weight: 500; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { padding: 8px 0; border-top: 1px solid var(--line); }
+  li:first-child { border-top: 0; }
+  li.me { font-weight: 600; }
+  .empty { color: var(--muted); font-style: italic; }
+  .in h2 { color: var(--green); } .out h2 { color: var(--red); }
+</style>
+</head>
+<body>
+<main>
+  <img class="hero" src="header.jpg" alt="Tegning av slitne fotballspillere under «Sunday Football Sign-in»">
+  <h1>⚽ Søndagsfotball</h1>
+  <p class="when" id="when">Søndag kl. 20:30 · Sandardhallen</p>
+
+  <div class="card">
+    <label for="name">Navn</label>
+    <input id="name" autocomplete="name" maxlength="40" placeholder="Skriv navnet ditt">
+    <div class="buttons">
+      <button id="yes" type="button">Jeg kan</button>
+      <button id="no" type="button">Jeg kan ikke</button>
+    </div>
+    <p id="msg" role="status"></p>
+  </div>
+
+  <div class="card in">
+    <h2>Kommer <span class="count" id="inCount">0</span></h2>
+    <ul id="inList"></ul>
+  </div>
+  <div class="card out">
+    <h2>Kommer ikke <span class="count" id="outCount">0</span></h2>
+    <ul id="outList"></ul>
+  </div>
+</main>
+
+<script>
+(() => {
+  const COOKIE = "fotball_navn";
+  const RESET_HOUR = 6; // listen nullstilles mandag kl. 06:00 (norsk tid)
+  const $ = id => document.getElementById(id);
+  let storeUrl = null;
+  let data = { week: null, players: [] };
+
+  // --- uke-nøkkel: datoen for søndagen kampen gjelder ---
+  function osloNow() {
+    const p = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Oslo", year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", hourCycle: "h23"
+    }).formatToParts(new Date()).map(x => [x.type, x.value]));
+    return { y: +p.year, m: +p.month, d: +p.day, h: +p.hour };
+  }
+  function currentSunday() {
+    const n = osloNow();
+    const d = new Date(Date.UTC(n.y, n.m - 1, n.d));
+    if (d.getUTCDay() === 1 && n.h < RESET_HOUR) d.setUTCDate(d.getUTCDate() - 1);
+    d.setUTCDate(d.getUTCDate() + (7 - d.getUTCDay()) % 7);
+    return d;
+  }
+  const weekKey = () => currentSunday().toISOString().slice(0, 10);
+
+  // --- cookie ---
+  function getName() {
+    const m = document.cookie.match(new RegExp("(?:^|; )" + COOKIE + "=([^;]*)"));
+    return m ? decodeURIComponent(m[1]) : "";
+  }
+  function saveName(v) {
+    document.cookie = COOKIE + "=" + encodeURIComponent(v) + "; max-age=" + 60 * 60 * 24 * 400 + "; path=/; SameSite=Lax";
+  }
+
+  // --- lagring ---
+  async function load() {
+    const r = await fetch(storeUrl, { headers: { Accept: "application/json" }, cache: "no-store" });
+    if (!r.ok) throw new Error("load " + r.status);
+    const d = await r.json();
+    if (!d || d.week !== weekKey() || !Array.isArray(d.players)) return { week: weekKey(), players: [] };
+    return d;
+  }
+  async function save(d) {
+    const r = await fetch(storeUrl, {
+      method: "PUT", headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(d)
+    });
+    if (!r.ok) throw new Error("save " + r.status);
+  }
+  const key = s => s.trim().toLowerCase();
+
+  async function setStatus(name, status) {
+    // Les, endre og skriv. Sjekk etterpå at endringen ble stående i tilfelle noen skrev samtidig.
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const d = await load();
+      d.players = d.players.filter(p => key(p.name) !== key(name));
+      d.players.push({ name, status, ts: Date.now() });
+      await save(d);
+      await new Promise(r => setTimeout(r, 400 + Math.random() * 400));
+      const check = await load();
+      data = check;
+      render();
+      const me = check.players.find(p => key(p.name) === key(name));
+      if (me && me.status === status) return;
+    }
+    throw new Error("conflict");
+  }
+
+  // --- visning ---
+  function render() {
+    const me = key($("name").value);
+    const players = [...data.players].sort((a, b) => a.ts - b.ts);
+    for (const [status, list, count] of [["in", "inList", "inCount"], ["out", "outList", "outCount"]]) {
+      const ul = $(list);
+      ul.textContent = "";
+      const rows = players.filter(p => p.status === status);
+      $(count).textContent = rows.length;
+      if (!rows.length) {
+        const li = document.createElement("li");
+        li.className = "empty";
+        li.textContent = "Ingen ennå";
+        ul.append(li);
+      }
+      rows.forEach((p, i) => {
+        const li = document.createElement("li");
+        li.textContent = (status === "in" ? (i + 1) + ". " : "") + p.name;
+        if (me && key(p.name) === me) li.classList.add("me");
+        ul.append(li);
+      });
+    }
+  }
+  function showDate() {
+    const s = new Intl.DateTimeFormat("nb-NO", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })
+      .format(currentSunday());
+    $("when").textContent = s.charAt(0).toUpperCase() + s.slice(1) + " kl. 20:30 · Sandardhallen";
+  }
+  const msg = t => { $("msg").textContent = t; };
+
+  async function refresh() {
+    try { data = await load(); render(); }
+    catch (e) { msg("Klarte ikke å hente listen. Prøv å laste siden på nytt."); }
+  }
+
+  async function onClick(status) {
+    const name = $("name").value.trim().replace(/\s+/g, " ");
+    if (!name) { msg("Skriv navnet ditt først."); $("name").focus(); return; }
+    saveName(name);
+    $("yes").disabled = $("no").disabled = true;
+    msg("Lagrer …");
+    try {
+      await setStatus(name, status);
+      msg(status === "in" ? "Supert, du er med! ⚽" : "Ok, du er satt opp som «kan ikke».");
+    } catch (e) {
+      msg("Noe gikk galt. Prøv igjen.");
+    } finally {
+      $("yes").disabled = $("no").disabled = false;
+    }
+  }
+
+  $("yes").addEventListener("click", () => onClick("in"));
+  $("no").addEventListener("click", () => onClick("out"));
+  $("name").addEventListener("input", render);
+  $("name").addEventListener("keydown", e => { if (e.key === "Enter") onClick("in"); });
+
+  $("name").value = getName();
+  showDate();
+  render();
+  fetch("store.json", { cache: "no-store" })
+    .then(r => r.json())
+    .then(s => { storeUrl = s.url; return refresh(); })
+    .catch(() => msg("Listen er ikke klar ennå. Prøv igjen om litt."));
+  setInterval(() => { if (storeUrl && !document.hidden) refresh(); }, 30000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && storeUrl) { showDate(); refresh(); } });
+})();
+</script>
+</body>
+</html>
