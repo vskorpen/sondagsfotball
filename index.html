@@ -110,16 +110,18 @@
   }
 
   // --- lagring ---
+  // Listen lagres som én JSON-tekst på textdb.dev (gratis, ingen konto).
   async function load() {
-    const r = await fetch(storeUrl, { headers: { Accept: "application/json" }, cache: "no-store" });
+    const r = await fetch(storeUrl, { cache: "no-store" });
     if (!r.ok) throw new Error("load " + r.status);
-    const d = await r.json();
+    let d = null;
+    try { d = JSON.parse((await r.text()) || "null"); } catch (e) { d = null; }
     if (!d || d.week !== weekKey() || !Array.isArray(d.players)) return { week: weekKey(), players: [] };
     return d;
   }
   async function save(d) {
     const r = await fetch(storeUrl, {
-      method: "PUT", headers: { "Content-Type": "application/json", Accept: "application/json" },
+      method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" },
       body: JSON.stringify(d)
     });
     if (!r.ok) throw new Error("save " + r.status);

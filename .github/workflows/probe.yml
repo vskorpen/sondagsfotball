@@ -5,15 +5,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          set +e
-          echo "== jsonblob"; curl -sS -o /dev/null -w '%{http_code}\n' -X POST -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"a":1}' https://jsonblob.com/api/jsonBlob
-          curl -sS -o /dev/null -w 'get api: %{http_code}\n' https://jsonblob.com/api/jsonBlob/1
-          echo "== textdb"; K=sondagsfotball-probe-$RANDOM
-          curl -sS -w ' %{http_code}\n' -X POST -d '{"a":1}' https://textdb.dev/api/data/$K
-          curl -sS -D - https://textdb.dev/api/data/$K | head -20
-          echo "== textdb preflight"; curl -sS -D - -o /dev/null -X OPTIONS -H 'Origin: https://vskorpen.github.io' -H 'Access-Control-Request-Method: POST' https://textdb.dev/api/data/$K
-          echo "== npoint"; curl -sS -w ' %{http_code}\n' -X POST -H 'Content-Type: application/json' -d '{"contents":{"a":1}}' https://api.npoint.io/
-          echo "== kvdb"; curl -sS -w ' %{http_code}\n' -X POST https://kvdb.io
-          echo "== jsonbin"; curl -sS -w ' %{http_code}\n' -X POST -H 'Content-Type: application/json' -d '{"a":1}' https://api.jsonbin.io/v3/b
-          echo "== extendsclass"; curl -sS -w ' %{http_code}\n' -X POST -H 'Content-Type: application/json' -d '{"a":1}' https://json.extendsclass.com/bin
-          true
+          K=probe-$RANDOM$RANDOM; U=https://textdb.dev/api/data/$K
+          curl -sS -w ' %{http_code}\n' -X POST -H 'Content-Type: text/plain;charset=UTF-8' -H 'Origin: https://vskorpen.github.io' --data-binary '{"week":"2026-10-11","players":[{"name":"Øyvind Æsø","status":"in","ts":1}]}' $U
+          echo "GET:"; curl -sS $U; echo
+          curl -sS -X POST -H 'Content-Type: text/plain' --data-binary '' $U; echo "after empty:"; curl -sS $U; echo
