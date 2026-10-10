@@ -121,7 +121,7 @@
   }
   async function save(d) {
     const r = await fetch(storeUrl, {
-      method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      method: "POST", headers: { "Content-Type": "text/plain" },
       body: JSON.stringify(d)
     });
     if (!r.ok) throw new Error("save " + r.status);

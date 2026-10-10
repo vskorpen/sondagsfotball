@@ -6,16 +6,8 @@ jobs:
     steps:
       - run: |
           set +e
-          B='{"week":"2026-10-11","players":[{"name":"Øyvind & Co=1","status":"in","ts":1}]}'
-          for ct in 'text/plain' 'application/json' 'application/octet-stream' 'application/x-www-form-urlencoded'; do
-            U=https://textdb.dev/api/data/probe-$RANDOM$RANDOM
-            echo "== $ct"; curl -sS -o /dev/null -w '%{http_code}\n' -X POST -H "Content-Type: $ct" --data-binary "$B" $U
-            curl -sS $U; echo
-          done
-          echo "== no content-type"; U=https://textdb.dev/api/data/probe-$RANDOM$RANDOM
-          curl -sS -o /dev/null -w '%{http_code}\n' -X POST -H "Content-Type:" --data-binary "$B" $U; curl -sS $U; echo
-          echo "== base64url form"; U=https://textdb.dev/api/data/probe-$RANDOM$RANDOM
-          E=$(printf '%s' "$B" | base64 -w0 | tr '+/' '-_' | tr -d '=')
-          curl -sS -o /dev/null -w '%{http_code}\n' -X POST -H "Content-Type: application/x-www-form-urlencoded" --data-binary "$E" $U; curl -sS $U; echo
-          echo "== PUT text/plain"; U=https://textdb.dev/api/data/probe-$RANDOM$RANDOM
-          curl -sS -o /dev/null -w '%{http_code}\n' -X PUT -H "Content-Type: text/plain" --data-binary "$B" $U; curl -sS $U; echo
+          B='{"week":"2026-10-11","players":[]}'
+          U=https://textdb.dev/api/data/probe-$RANDOM$RANDOM
+          echo "== text/plain + Origin"; curl -sS -D - -o /dev/null -X POST -H 'Origin: https://vskorpen.github.io' -H "Content-Type: text/plain" --data-binary "$B" $U | grep -iE '^HTTP|access-control-allow-origin'
+          curl -sS $U; echo
+          echo "== charset"; curl -sS -o /dev/null -w '%{http_code}\n' -X POST -H "Content-Type: text/plain;charset=UTF-8" --data-binary "$B" $U
