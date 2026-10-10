@@ -22,14 +22,21 @@ jobs:
             curl -fsS -H 'Accept: application/json' "$url"
             exit 0
           fi
-          loc=$(curl -fsS -D - -o /dev/null -X POST \
+          resp=$(curl -sS -D headers.txt -X POST \
             -H 'Content-Type: application/json' -H 'Accept: application/json' \
-            -d '{"week":null,"players":[]}' https://jsonblob.com/api/jsonBlob \
-            | tr -d '\r' | awk 'tolower($1)=="location:"{print $2}')
-          case "$loc" in http*) url="$loc" ;; *) url="https://jsonblob.com$loc" ;; esac
-          url=$(echo "$url" | sed 's#jsonblob.com/jsonBlob/#jsonblob.com/api/jsonBlob/#')
+            -d '{"week":null,"players":[]}' https://jsonblob.com/api/jsonBlob)
+          echo "--- headers"; cat headers.txt; echo "--- body"; echo "$resp"
+          loc=$(tr -d '\r' < headers.txt | awk 'tolower($1)=="location:"{print $2}' | tail -1)
+          id=$(basename "${loc:-}")
+          [ -z "$id" ] && id=$(echo "$resp" | jq -r '.id // empty' 2>/dev/null || true)
+          [ -z "$id" ] && id=$(tr -d '\r' < headers.txt | awk 'tolower($1)=="x-jsonblob-id:"{print $2}' | tail -1)
+          [ -n "$id" ] || { echo "Fant ingen blob-id"; exit 1; }
+          url="https://jsonblob.com/api/jsonBlob/$id"
           echo "Ny liste: $url"
-          curl -fsS -H 'Accept: application/json' "$url"
+          curl -fsS -H 'Accept: application/json' "$url" | jq -e '.players' >/dev/null || { echo "Lista svarer ikke med JSON"; exit 1; }
+          # sjekk CORS for nettleseren
+          curl -sS -D - -o /dev/null -X OPTIONS -H 'Origin: https://vskorpen.github.io' \
+            -H 'Access-Control-Request-Method: PUT' -H 'Access-Control-Request-Headers: content-type' "$url"
           jq -n --arg url "$url" '{url:$url}' > store.json
           git config user.name github-actions
           git config user.email github-actions@users.noreply.github.com
