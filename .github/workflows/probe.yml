@@ -5,7 +5,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          K=probe-$RANDOM$RANDOM; U=https://textdb.dev/api/data/$K
-          curl -sS -w ' %{http_code}\n' -X POST -H 'Content-Type: text/plain;charset=UTF-8' -H 'Origin: https://vskorpen.github.io' --data-binary '{"week":"2026-10-11","players":[{"name":"Øyvind Æsø","status":"in","ts":1}]}' $U
-          echo "GET:"; curl -sS $U; echo
-          curl -sS -X POST -H 'Content-Type: text/plain' --data-binary '' $U; echo "after empty:"; curl -sS $U; echo
+          set +e
+          B='{"week":"2026-10-11","players":[{"name":"Øyvind & Co=1","status":"in","ts":1}]}'
+          for ct in 'text/plain' 'application/json' 'application/octet-stream' 'application/x-www-form-urlencoded'; do
+            U=https://textdb.dev/api/data/probe-$RANDOM$RANDOM
+            echo "== $ct"; curl -sS -o /dev/null -w '%{http_code}\n' -X POST -H "Content-Type: $ct" --data-binary "$B" $U
+            curl -sS $U; echo
+          done
+          echo "== no content-type"; U=https://textdb.dev/api/data/probe-$RANDOM$RANDOM
+          curl -sS -o /dev/null -w '%{http_code}\n' -X POST -H "Content-Type:" --data-binary "$B" $U; curl -sS $U; echo
+          echo "== base64url form"; U=https://textdb.dev/api/data/probe-$RANDOM$RANDOM
+          E=$(printf '%s' "$B" | base64 -w0 | tr '+/' '-_' | tr -d '=')
+          curl -sS -o /dev/null -w '%{http_code}\n' -X POST -H "Content-Type: application/x-www-form-urlencoded" --data-binary "$E" $U; curl -sS $U; echo
+          echo "== PUT text/plain"; U=https://textdb.dev/api/data/probe-$RANDOM$RANDOM
+          curl -sS -o /dev/null -w '%{http_code}\n' -X PUT -H "Content-Type: text/plain" --data-binary "$B" $U; curl -sS $U; echo
